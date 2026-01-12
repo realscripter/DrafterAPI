@@ -22,6 +22,38 @@ async function getLogPath(projectId) {
     return path.join(dir, 'logs.json');
 }
 
+async function getEventPath(projectId) {
+    const dir = path.join(PROJECTS_DIR, projectId);
+    await fs.mkdir(dir, { recursive: true }).catch(() => {});
+    return path.join(dir, 'events.json');
+}
+
+export async function getEvents(projectId) {
+    try {
+        const eventPath = await getEventPath(projectId);
+        const data = await fs.readFile(eventPath, 'utf-8');
+        return JSON.parse(data);
+    } catch {
+        return [];
+    }
+}
+
+async function addEvent(projectId, type, message) {
+    const events = await getEvents(projectId);
+    const event = {
+        id: Date.now() + Math.random(),
+        timestamp: new Date().toISOString(),
+        type, // 'info', 'error', 'success', 'warning'
+        message
+    };
+    events.unshift(event);
+    if (events.length > 100) events.pop(); // Keep last 100 events
+    
+    const eventPath = await getEventPath(projectId);
+    await fs.writeFile(eventPath, JSON.stringify(events, null, 2)).catch(() => {});
+    return event;
+}
+
 export async function getLogs(projectId) {
   try {
     const logPath = await getLogPath(projectId);
@@ -65,6 +97,8 @@ export async function setupProject(projectId, io) {
     const project = await getProject(projectId);
     if (!project) throw new Error('Project not found');
     
+    addEvent(projectId, 'info', 'Starting project setup (Clone/Install/Build)...');
+
     const projectPath = path.join(PROJECTS_DIR, projectId);
     const token = await getGithubToken();
     
@@ -127,6 +161,7 @@ export async function startProject(projectId, io) {
     const projectPath = path.join(PROJECTS_DIR, projectId);
     
     addLog(projectId, `Starting project: ${project.startCmd}`, 'info');
+    addEvent(projectId, 'info', `Starting project: ${project.startCmd}`);
     
     // Setup (Clone/Install/Build) if not done? 
     // For now assume setup is done via a separate "Install/Build" action or auto-done.
@@ -164,6 +199,7 @@ export async function startProject(projectId, io) {
     
     updateProject(projectId, { status: 'running' });
     io.emit('project:update', { id: projectId, status: 'running' });
+    addEvent(projectId, 'success', 'Project started successfully');
 
     child.stdout.on('data', (data) => {
         const msg = data.toString();
@@ -183,6 +219,11 @@ export async function startProject(projectId, io) {
         updateProject(projectId, { status: 'stopped' });
         io.emit('project:update', { id: projectId, status: 'stopped' });
         addLog(projectId, `Process exited with code ${code}`, 'info');
+        if (code !== 0 && code !== null) {
+            addEvent(projectId, 'error', `Process exited with code ${code}`);
+        } else {
+            addEvent(projectId, 'info', 'Process stopped');
+        }
     });
 }
 
@@ -195,15 +236,25 @@ export async function stopProject(projectId) {
         // Force update status just in case
         updateProject(projectId, { status: 'stopped' });
         processes.delete(projectId);
+        addEvent(projectId, 'info', 'Project stopped manually');
     }
 }
 
 export async function pullProject(projectId, io) {
+    const project = await getProject(projectId);
     const projectPath = path.join(PROJECTS_DIR, projectId);
+    const wasRunning = processes.has(projectId);
     
     // Check if running
-    if (processes.has(projectId)) {
-        throw new Error('Cannot pull updates while project is running. Stop it first.');
+    if (wasRunning) {
+        if (!project.autoDeploy) {
+            throw new Error('Cannot pull updates while project is running. Stop it first.');
+        }
+        addLog(projectId, 'Stopping project for auto-deploy...', 'info');
+        addEvent(projectId, 'info', 'Stopping project for auto-deploy');
+        await stopProject(projectId);
+        // Wait a bit for cleanup
+        await new Promise(r => setTimeout(r, 1000));
     }
     
     try {
@@ -214,6 +265,7 @@ export async function pullProject(projectId, io) {
     
     const token = await getGithubToken();
     addLog(projectId, 'Pulling latest changes from GitHub...', 'info');
+    addEvent(projectId, 'info', 'Pulling latest changes from GitHub...');
     io.to(`project:${projectId}`).emit('log', { 
         id: Date.now(), 
         timestamp: new Date().toISOString(), 
@@ -227,7 +279,6 @@ export async function pullProject(projectId, io) {
     
     // Actually, simple-git uses the .git/config. If we used a token in URL, it's there.
     // If we want to support token rotation, we should update the remote origin URL.
-    const project = await getProject(projectId);
     const repoUrlWithAuth = project.repoUrl.replace('https://', `https://${token}@`);
     
     try {
@@ -239,12 +290,29 @@ export async function pullProject(projectId, io) {
     
     const msg = `Pull complete: ${JSON.stringify(result.summary)}`;
     addLog(projectId, msg, 'info');
+    addEvent(projectId, 'success', 'Git pull completed');
     io.to(`project:${projectId}`).emit('log', { 
         id: Date.now(), 
         timestamp: new Date().toISOString(), 
         message: msg, 
         type: 'info' 
     });
+
+    if (project.autoDeploy) {
+        addLog(projectId, 'Auto-Deploy: Running Install/Build...', 'info');
+        addEvent(projectId, 'info', 'Auto-Deploy: Running Install/Build...');
+        
+        if (project.installCmd) {
+            await runCommand(projectId, project.installCmd, projectPath, io);
+        }
+        if (project.buildCmd) {
+            await runCommand(projectId, project.buildCmd, projectPath, io);
+        }
+        
+        addLog(projectId, 'Auto-Deploy: Restarting project...', 'info');
+        addEvent(projectId, 'info', 'Auto-Deploy: Restarting project');
+        await startProject(projectId, io);
+    }
 }
 
 export async function stopAllProjects() {

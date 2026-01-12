@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import { generateKey, resetKey, validateKey, hasKey } from './auth.js';
 import { saveGithubToken, getGithubToken, listRepos, getUser, readConfig, writeConfig } from './github.js';
 import { listProjects, createProject, getProject, deleteProject, updateProject } from './projects.js';
-import { startProject, stopProject, getLogs, setupProject, clearLogs, stopAllProjects } from './runner.js';
+import { startProject, stopProject, getLogs, setupProject, clearLogs, stopAllProjects, pullProject, getEvents } from './runner.js';
 import { listFiles, readFile, saveFile } from './files.js';
 import { setupDomain, removeDomain } from './domains.js';
 import readline from 'readline';
@@ -321,6 +321,10 @@ export async function run(args) {
 
   app.get('/api/projects/:id/logs', async (req, res) => {
     res.json(await getLogs(req.params.id));
+  });
+
+  app.get('/api/projects/:id/events', async (req, res) => {
+    res.json(await getEvents(req.params.id));
   });
 
   app.delete('/api/projects/:id/logs', async (req, res) => {

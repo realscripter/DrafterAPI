@@ -5,7 +5,8 @@ import io from 'socket.io-client';
 import { 
     Play, Square, Terminal, Folder, ArrowLeft, Save, 
     Settings, ExternalLink, RefreshCw, X, Check, 
-    Trash2, Search, FileCode, Activity, GitBranch, Download
+    Trash2, Search, FileCode, Activity, GitBranch, Download,
+    AlertCircle, Info, CheckCircle
 } from 'lucide-react';
 import Editor from 'react-simple-code-editor';
 import { highlight, languages } from 'prismjs/components/prism-core';
@@ -20,21 +21,47 @@ import 'prismjs/components/prism-python';
 import 'prismjs/themes/prism-tomorrow.css'; // Dark theme
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
+// Simple Toast Component
+const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 'error' | 'info', onClose: () => void }) => {
+    useEffect(() => {
+        const timer = setTimeout(onClose, 3000);
+        return () => clearTimeout(timer);
+    }, [onClose]);
+
+    const bg = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500';
+    const Icon = type === 'success' ? CheckCircle : type === 'error' ? AlertCircle : Info;
+
+    return (
+        <div className={`fixed top-4 right-4 ${bg} text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 animate-in slide-in-from-right fade-in z-50`}>
+            <Icon size={20} />
+            <span className="font-medium text-sm">{message}</span>
+            <button onClick={onClose} className="hover:bg-white/20 p-1 rounded-lg transition"><X size={16} /></button>
+        </div>
+    );
+};
+
 const ServerManager = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState<any>(null);
   const [status, setStatus] = useState('stopped');
   const [logs, setLogs] = useState<any[]>([]);
+  const [events, setEvents] = useState<any[]>([]);
   const [stats, setStats] = useState({ cpu: 0, memory: 0, uptime: 0 });
   const [statsHistory, setStatsHistory] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('console');
+  const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
   const socketRef = useRef<any>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+      setToast({ message, type });
+  };
 
   useEffect(() => {
     fetchProject();
     fetchLogs();
+    fetchEvents();
 
     const socket = io(import.meta.env.DEV ? 'http://localhost:8000' : '/');
     socketRef.current = socket;
@@ -49,7 +76,7 @@ const ServerManager = () => {
       setStats(data);
       setStatsHistory(prev => {
           const newHistory = [...prev, { ...data, time: new Date().toLocaleTimeString() }];
-          if (newHistory.length > 20) newHistory.shift(); // Keep last 20 points
+          if (newHistory.length > 20) newHistory.shift(); 
           return newHistory;
       });
     });
@@ -67,48 +94,94 @@ const ServerManager = () => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
+  // Poll events occasionally
+  useEffect(() => {
+      const interval = setInterval(fetchEvents, 5000);
+      return () => clearInterval(interval);
+  }, [id]);
+
   const fetchProject = async () => {
-    const res = await api.get(`/projects/${id}`);
-    setProject(res.data);
-    setStatus(res.data.status);
+    try {
+        const res = await api.get(`/projects/${id}`);
+        setProject(res.data);
+        setStatus(res.data.status);
+    } catch (e) {
+        showToast('Failed to load project', 'error');
+    }
   };
 
   const fetchLogs = async () => {
-    const res = await api.get(`/projects/${id}/logs`);
-    setLogs(res.data);
+    try {
+        const res = await api.get(`/projects/${id}/logs`);
+        setLogs(res.data);
+    } catch (e) {}
+  };
+
+  const fetchEvents = async () => {
+      try {
+          const res = await api.get(`/projects/${id}/events`);
+          setEvents(res.data);
+      } catch (e) {}
   };
 
   const handleClearLogs = async () => {
-    if (!confirm('Are you sure you want to delete all logs?')) return;
-    await api.delete(`/projects/${id}/logs`);
-    setLogs([]);
+    if (!window.confirm('Are you sure you want to delete all logs?')) return;
+    try {
+        await api.delete(`/projects/${id}/logs`);
+        setLogs([]);
+        showToast('Logs cleared', 'success');
+    } catch (e) {
+        showToast('Failed to clear logs', 'error');
+    }
   };
 
   const handleStart = async () => {
-    await api.post(`/projects/${id}/start`);
+    try {
+        await api.post(`/projects/${id}/start`);
+        showToast('Start command sent', 'success');
+    } catch (e: any) {
+        showToast(e.response?.data?.error || 'Failed to start', 'error');
+    }
   };
 
   const handleStop = async () => {
-    await api.post(`/projects/${id}/stop`);
+    try {
+        await api.post(`/projects/${id}/stop`);
+        showToast('Stop command sent', 'info');
+    } catch (e: any) {
+        showToast(e.response?.data?.error || 'Failed to stop', 'error');
+    }
   };
 
   const handleRestart = async () => {
-    await api.post(`/projects/${id}/stop`);
-    setTimeout(async () => {
-      await api.post(`/projects/${id}/start`);
-    }, 1000);
+    try {
+        await api.post(`/projects/${id}/stop`);
+        showToast('Restarting...', 'info');
+        setTimeout(async () => {
+            await api.post(`/projects/${id}/start`);
+            showToast('Start command sent', 'success');
+        }, 1000);
+    } catch (e: any) {
+        showToast('Failed to restart', 'error');
+    }
   };
 
   const handlePullUpdates = async () => {
-      if (status === 'running') {
-          alert('Please stop the server before pulling updates.');
-          return;
+      if (status === 'running' && !project?.autoDeploy) {
+          if (!window.confirm('Project is running. Stop it to update?')) return;
+          // If they say yes, we'll let the backend handle the stop (if we implemented that logic)
+          // or we stop it here. Backend `pullProject` now handles auto-stop if `autoDeploy` is true.
+          // But if `autoDeploy` is false, backend throws.
+          // Let's just try calling pull, if it fails, show error.
       }
+      
+      showToast('Pulling updates...', 'info');
       try {
         await api.post(`/projects/${id}/pull`);
-        alert('Updates pulled successfully!');
+        showToast('Updates pulled successfully!', 'success');
+        fetchEvents();
       } catch (e: any) {
-        alert('Failed to pull updates: ' + (e.response?.data?.error || e.message));
+        showToast('Failed to pull updates: ' + (e.response?.data?.error || e.message), 'error');
       }
   };
 
@@ -130,6 +203,8 @@ const ServerManager = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col font-sans">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      
       {/* Header */}
       <div className="bg-gray-800 p-4 shadow-md flex justify-between items-center border-b border-gray-700 z-10">
         <div className="flex items-center gap-4">
@@ -188,10 +263,11 @@ const ServerManager = () => {
                 <div className="w-px bg-gray-800 my-1 mx-1" />
                 <button 
                     onClick={handlePullUpdates}
-                    className="p-2.5 rounded-lg transition-all text-blue-400 hover:bg-blue-500/10 hover:scale-105 active:scale-95"
-                    title="Pull Updates from GitHub"
+                    className="p-2.5 rounded-lg transition-all text-blue-400 hover:bg-blue-500/10 hover:scale-105 active:scale-95 relative group"
+                    title={project.autoDeploy ? "Pull & Auto Deploy" : "Pull Updates"}
                 >
                     <Download size={20} />
+                    {project.autoDeploy && <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-green-500 rounded-full" />}
                 </button>
             </div>
 
@@ -212,6 +288,7 @@ const ServerManager = () => {
             { id: 'console', icon: Terminal, label: 'Console' },
             { id: 'files', icon: Folder, label: 'File Editor' },
             { id: 'monitoring', icon: Activity, label: 'Monitoring' },
+            { id: 'events', icon: GitBranch, label: 'Activity' },
             { id: 'settings', icon: Settings, label: 'Settings' }
         ].map(tab => (
             <button 
@@ -245,7 +322,9 @@ const ServerManager = () => {
                         logs.map((log) => (
                             <div key={log.id} className="mb-1 hover:bg-white/5 px-2 py-0.5 rounded transition-colors group flex gap-3">
                                 <span className="text-gray-700 select-none font-bold text-[10px] leading-6 min-w-[70px]">
-                                    {new Date(log.timestamp).toLocaleTimeString([], { hour12: false })}
+                                    {log.timestamp && !isNaN(new Date(log.timestamp).getTime()) 
+                                        ? new Date(log.timestamp).toLocaleTimeString([], { hour12: false }) 
+                                        : '--:--:--'}
                                 </span>
                                 <span className={`leading-6 flex-1 break-all ${
                                     log.type === 'stderr' ? 'text-red-400' : 
@@ -262,12 +341,50 @@ const ServerManager = () => {
             </div>
         )}
         
-        {activeTab === 'files' && <FileManager projectId={id!} />}
+        {activeTab === 'files' && <FileManager projectId={id!} showToast={showToast} />}
         {activeTab === 'monitoring' && <Monitoring statsHistory={statsHistory} />}
-        {activeTab === 'settings' && <ProjectSettings projectId={id!} project={project} onUpdate={fetchProject} />}
+        {activeTab === 'events' && <EventsList events={events} />}
+        {activeTab === 'settings' && <ProjectSettings projectId={id!} project={project} onUpdate={fetchProject} showToast={showToast} />}
       </div>
     </div>
   );
+};
+
+const EventsList = ({ events }: { events: any[] }) => {
+    return (
+        <div className="h-full p-6 overflow-y-auto scrollbar-custom bg-gray-950">
+            <div className="max-w-4xl mx-auto space-y-4">
+                <h3 className="text-lg font-bold text-gray-300 mb-6 flex items-center gap-2">
+                    <Activity size={20} /> Recent Activity
+                </h3>
+                {events.length === 0 ? (
+                    <div className="text-gray-500 italic text-center py-10">No events recorded yet.</div>
+                ) : (
+                    events.map((event) => (
+                        <div key={event.id} className="bg-gray-900 border border-white/5 p-4 rounded-xl flex items-center gap-4">
+                            <div className={`p-2 rounded-lg ${
+                                event.type === 'error' ? 'bg-red-500/10 text-red-500' :
+                                event.type === 'success' ? 'bg-green-500/10 text-green-500' :
+                                'bg-blue-500/10 text-blue-500'
+                            }`}>
+                                {event.type === 'error' ? <AlertCircle size={20} /> :
+                                 event.type === 'success' ? <CheckCircle size={20} /> :
+                                 <Info size={20} />}
+                            </div>
+                            <div className="flex-1">
+                                <p className="text-gray-200 font-medium">{event.message}</p>
+                                <span className="text-xs text-gray-500">
+                                    {event.timestamp && !isNaN(new Date(event.timestamp).getTime()) 
+                                        ? new Date(event.timestamp).toLocaleString()
+                                        : 'Unknown Time'}
+                                </span>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+        </div>
+    );
 };
 
 const Monitoring = ({ statsHistory }: { statsHistory: any[] }) => {
@@ -334,13 +451,14 @@ const Monitoring = ({ statsHistory }: { statsHistory: any[] }) => {
     );
 };
 
-const FileManager = ({ projectId }: { projectId: string }) => {
+const FileManager = ({ projectId, showToast }: { projectId: string, showToast: any }) => {
     const [files, setFiles] = useState<any[]>([]);
     const [currentPath, setCurrentPath] = useState('');
     const [editingFile, setEditingFile] = useState<string | null>(null);
     const [fileContent, setFileContent] = useState('');
     const [originalContent, setOriginalContent] = useState('');
     const [saving, setSaving] = useState(false);
+    const [loading, setLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     
     useEffect(() => {
@@ -348,11 +466,14 @@ const FileManager = ({ projectId }: { projectId: string }) => {
     }, [currentPath]);
 
     const loadFiles = async (path: string) => {
+        setLoading(true);
         try {
             const res = await api.get(`/projects/${projectId}/files`, { params: { path } });
             setFiles(res.data);
         } catch (e) {
-            console.error('Failed to load files:', e);
+            showToast('Failed to load files', 'error');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -360,13 +481,16 @@ const FileManager = ({ projectId }: { projectId: string }) => {
         if (file.isDirectory) {
             setCurrentPath(file.path);
         } else {
+            setLoading(true);
             try {
                 const res = await api.get(`/projects/${projectId}/files/content`, { params: { path: file.path } });
                 setFileContent(res.data.content);
                 setOriginalContent(res.data.content);
                 setEditingFile(file.path);
             } catch (e) {
-                alert('Failed to load file');
+                showToast('Failed to load file', 'error');
+            } finally {
+                setLoading(false);
             }
         }
     };
@@ -377,8 +501,9 @@ const FileManager = ({ projectId }: { projectId: string }) => {
         try {
             await api.post(`/projects/${projectId}/files/content`, { content: fileContent }, { params: { path: editingFile } });
             setOriginalContent(fileContent);
+            showToast('File saved!', 'success');
         } catch (e) {
-            alert('Failed to save file');
+            showToast('Failed to save file', 'error');
         } finally {
             setSaving(false);
         }
@@ -405,7 +530,7 @@ const FileManager = ({ projectId }: { projectId: string }) => {
                     <div className="flex items-center gap-4">
                         <button 
                             onClick={() => {
-                                if (hasChanges && !confirm('You have unsaved changes. Are you sure you want to close?')) return;
+                                if (hasChanges && !window.confirm('You have unsaved changes. Are you sure you want to close?')) return;
                                 setEditingFile(null);
                                 setFileContent('');
                                 setOriginalContent('');
@@ -490,6 +615,8 @@ const FileManager = ({ projectId }: { projectId: string }) => {
             {/* File List */}
             <div className="flex-1 overflow-y-auto p-6 scrollbar-custom">
                 <div className="max-w-5xl mx-auto space-y-1">
+                    {loading && <div className="text-center py-4 text-gray-500 animate-pulse">Loading...</div>}
+                    
                     {currentPath && (
                         <div 
                             className="p-4 hover:bg-white/5 cursor-pointer text-blue-400 rounded-xl flex items-center gap-3 transition-colors mb-2 group border border-transparent hover:border-blue-500/20"
@@ -499,13 +626,13 @@ const FileManager = ({ projectId }: { projectId: string }) => {
                             <span className="font-bold">.. / (Parent Directory)</span>
                         </div>
                     )}
-                    {filteredFiles.length === 0 ? (
+                    {!loading && filteredFiles.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-20 text-gray-600">
                             <Search size={48} className="mb-4 opacity-20" />
                             <p className="font-medium italic">No files match your search</p>
                         </div>
                     ) : (
-                        filteredFiles.map(file => (
+                        !loading && filteredFiles.map(file => (
                             <div 
                                 key={file.path} 
                                 className="p-4 hover:bg-white/5 cursor-pointer flex items-center gap-4 text-gray-300 rounded-xl transition-all border border-transparent hover:border-white/5 group"
@@ -536,13 +663,14 @@ const FileManager = ({ projectId }: { projectId: string }) => {
     );
 };
 
-const ProjectSettings = ({ projectId, project, onUpdate }: { projectId: string; project: any; onUpdate: () => void }) => {
+const ProjectSettings = ({ projectId, project, onUpdate, showToast }: { projectId: string; project: any; onUpdate: () => void, showToast: any }) => {
     const [formData, setFormData] = useState({
         port: project.port || 3000,
         startCmd: project.startCmd || '',
         installCmd: project.installCmd || '',
         buildCmd: project.buildCmd || '',
-        ramLimit: project.ramLimit || 512
+        ramLimit: project.ramLimit || 512,
+        autoDeploy: project.autoDeploy || false
     });
     const [saving, setSaving] = useState(false);
 
@@ -551,9 +679,9 @@ const ProjectSettings = ({ projectId, project, onUpdate }: { projectId: string; 
         try {
             await api.put(`/projects/${projectId}`, formData);
             await onUpdate();
-            alert('Configuration saved successfully!');
+            showToast('Configuration saved successfully!', 'success');
         } catch (e) {
-            alert('Failed to save settings');
+            showToast('Failed to save settings', 'error');
         } finally {
             setSaving(false);
         }
@@ -574,6 +702,19 @@ const ProjectSettings = ({ projectId, project, onUpdate }: { projectId: string; 
                     </div>
                     
                     <div className="space-y-6">
+                        <div className="bg-gray-950/50 p-6 rounded-2xl border border-white/5 flex items-center justify-between">
+                            <div>
+                                <h4 className="font-bold text-white mb-1">Auto Deploy</h4>
+                                <p className="text-xs text-gray-500">Automatically install, build and restart when you pull updates</p>
+                            </div>
+                            <button 
+                                onClick={() => setFormData({...formData, autoDeploy: !formData.autoDeploy})}
+                                className={`w-12 h-6 rounded-full transition-colors relative ${formData.autoDeploy ? 'bg-green-500' : 'bg-gray-700'}`}
+                            >
+                                <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${formData.autoDeploy ? 'left-7' : 'left-1'}`} />
+                            </button>
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-1">Network Port</label>
