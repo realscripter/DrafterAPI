@@ -17,7 +17,7 @@ import axios from 'axios';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 
-const PORT = 8000;
+const PORT = process.env.PORT || 8000;
 
 export async function run(args) {
   const command = args[0];

@@ -13,6 +13,7 @@ const CreateProject = () => {
     installCmd: 'npm install',
     buildCmd: 'npm run build',
     startCmd: 'npm start',
+    port: 3000,
     ramLimit: 512
   });
 
@@ -113,18 +114,29 @@ const CreateProject = () => {
                     </div>
                 </div>
 
-                <div>
-                    <label className="block text-gray-400 mb-2">RAM Limit (MB)</label>
-                    <input 
-                        type="range" 
-                        min="128" 
-                        max="8192" 
-                        step="128"
-                        className="w-full"
-                        value={formData.ramLimit}
-                        onChange={e => setFormData({...formData, ramLimit: Number(e.target.value)})}
-                    />
-                    <div className="text-right text-gray-400 text-sm">{formData.ramLimit} MB</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-gray-400 mb-2">RAM Limit (MB)</label>
+                        <input 
+                            type="range" 
+                            min="128" 
+                            max="8192" 
+                            step="128"
+                            className="w-full"
+                            value={formData.ramLimit}
+                            onChange={e => setFormData({...formData, ramLimit: Number(e.target.value)})}
+                        />
+                        <div className="text-right text-gray-400 text-sm">{formData.ramLimit} MB</div>
+                    </div>
+                    <div>
+                        <label className="block text-gray-400 mb-2">Network Port</label>
+                        <input 
+                            type="number"
+                            className="w-full bg-gray-900 border border-gray-700 rounded p-2 focus:border-blue-500 outline-none"
+                            value={formData.port}
+                            onChange={e => setFormData({...formData, port: Number(e.target.value)})}
+                        />
+                    </div>
                 </div>
 
                 <button 
