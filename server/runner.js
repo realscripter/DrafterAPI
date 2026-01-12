@@ -158,7 +158,7 @@ export async function startProject(projectId, io) {
         } catch (e) {
             // Process might be dead
         }
-    }, 2000);
+    }, 1000);
 
     processes.set(projectId, { process: child, monitorInterval });
     
@@ -196,6 +196,55 @@ export async function stopProject(projectId) {
         updateProject(projectId, { status: 'stopped' });
         processes.delete(projectId);
     }
+}
+
+export async function pullProject(projectId, io) {
+    const projectPath = path.join(PROJECTS_DIR, projectId);
+    
+    // Check if running
+    if (processes.has(projectId)) {
+        throw new Error('Cannot pull updates while project is running. Stop it first.');
+    }
+    
+    try {
+        await fs.access(projectPath);
+    } catch {
+        throw new Error('Project directory does not exist. Start project to clone it.');
+    }
+    
+    const token = await getGithubToken();
+    addLog(projectId, 'Pulling latest changes from GitHub...', 'info');
+    io.to(`project:${projectId}`).emit('log', { 
+        id: Date.now(), 
+        timestamp: new Date().toISOString(), 
+        message: 'Pulling latest changes from GitHub...', 
+        type: 'info' 
+    });
+    
+    const git = simpleGit(projectPath);
+    // If token exists, we might need to update remote url if it expired or changed, but usually it's embedded or credential helper used.
+    // For now assume the one used at clone works or we re-form it.
+    
+    // Actually, simple-git uses the .git/config. If we used a token in URL, it's there.
+    // If we want to support token rotation, we should update the remote origin URL.
+    const project = await getProject(projectId);
+    const repoUrlWithAuth = project.repoUrl.replace('https://', `https://${token}@`);
+    
+    try {
+        await git.removeRemote('origin');
+    } catch {}
+    await git.addRemote('origin', repoUrlWithAuth);
+
+    const result = await git.pull('origin', 'main'); // Assume main for now, or detect default branch
+    
+    const msg = `Pull complete: ${JSON.stringify(result.summary)}`;
+    addLog(projectId, msg, 'info');
+    io.to(`project:${projectId}`).emit('log', { 
+        id: Date.now(), 
+        timestamp: new Date().toISOString(), 
+        message: msg, 
+        type: 'info' 
+    });
 }
 
 export async function stopAllProjects() {

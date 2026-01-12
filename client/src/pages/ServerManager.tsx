@@ -100,8 +100,16 @@ const ServerManager = () => {
   };
 
   const handlePullUpdates = async () => {
-      // Placeholder for git pull functionality - backend support needed
-      alert('Git pull functionality coming soon to backend!');
+      if (status === 'running') {
+          alert('Please stop the server before pulling updates.');
+          return;
+      }
+      try {
+        await api.post(`/projects/${id}/pull`);
+        alert('Updates pulled successfully!');
+      } catch (e: any) {
+        alert('Failed to pull updates: ' + (e.response?.data?.error || e.message));
+      }
   };
 
   const openUrl = () => {

@@ -310,6 +310,15 @@ export async function run(args) {
     }
   });
 
+  app.post('/api/projects/:id/pull', async (req, res) => {
+    try {
+      await pullProject(req.params.id, io);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get('/api/projects/:id/logs', async (req, res) => {
     res.json(await getLogs(req.params.id));
   });
