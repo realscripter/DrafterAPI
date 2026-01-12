@@ -132,10 +132,11 @@ export async function setupProject(projectId, io) {
 
 function runCommand(projectId, command, cwd, io) {
     return new Promise((resolve, reject) => {
-        const [cmd, ...args] = command.split(' ');
-        const child = spawn(cmd, args, { cwd, shell: true });
-        
-        child.stdout.on('data', (data) => {
+    const [cmd, ...args] = command.split(' ');
+    const env = { ...process.env, PORT: 3000 }; // Default or whatever for build/install
+    const child = spawn(cmd, args, { cwd, shell: true, env });
+    
+    child.stdout.on('data', (data) => {
             const msg = data.toString();
             const log = addLog(projectId, msg, 'stdout');
             io.to(`project:${projectId}`).emit('log', log);
@@ -173,7 +174,9 @@ export async function startProject(projectId, io) {
     }
 
     const [cmd, ...args] = project.startCmd.split(' ');
-    const child = spawn(cmd, args, { cwd: projectPath, shell: true });
+    // Pass PORT env var so apps that respect it will listen on the correct port
+    const env = { ...process.env, PORT: project.port || 3000 };
+    const child = spawn(cmd, args, { cwd: projectPath, shell: true, env });
     
     const monitorInterval = setInterval(async () => {
         try {

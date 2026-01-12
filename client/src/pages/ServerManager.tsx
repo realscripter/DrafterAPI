@@ -6,7 +6,7 @@ import {
     Play, Square, Terminal, Folder, ArrowLeft, Save, 
     Settings, ExternalLink, RefreshCw, X, Check, 
     Trash2, Search, FileCode, Activity, GitBranch, Download,
-    AlertCircle, Info, CheckCircle
+    AlertCircle, Info, CheckCircle, AlertTriangle
 } from 'lucide-react';
 import Editor from 'react-simple-code-editor';
 import { highlight, languages } from 'prismjs/components/prism-core';
@@ -40,6 +40,42 @@ const Toast = ({ message, type, onClose }: { message: string, type: 'success' | 
     );
 };
 
+// Confirmation Modal Component
+const ConfirmModal = ({ isOpen, title, message, onConfirm, onCancel, confirmText = 'Confirm', isDanger = false }: any) => {
+    if (!isOpen) return null;
+    return (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-gray-900 border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl scale-100 animate-in zoom-in-95 duration-200">
+                <div className="flex items-center gap-3 mb-4">
+                    <div className={`p-3 rounded-full ${isDanger ? 'bg-red-500/10 text-red-500' : 'bg-blue-500/10 text-blue-500'}`}>
+                        {isDanger ? <AlertTriangle size={24} /> : <Info size={24} />}
+                    </div>
+                    <h3 className="text-xl font-bold">{title}</h3>
+                </div>
+                <p className="text-gray-400 mb-8 leading-relaxed">
+                    {message}
+                </p>
+                <div className="flex gap-3 justify-end">
+                    <button 
+                        onClick={onCancel}
+                        className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-xl font-medium transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={onConfirm}
+                        className={`px-4 py-2 rounded-xl font-bold transition-colors ${
+                            isDanger ? 'bg-red-600 hover:bg-red-500 text-white' : 'bg-blue-600 hover:bg-blue-500 text-white'
+                        }`}
+                    >
+                        {confirmText}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const ServerManager = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -51,11 +87,27 @@ const ServerManager = () => {
   const [statsHistory, setStatsHistory] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('console');
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
+  const [confirmState, setConfirmState] = useState<{isOpen: boolean, title: string, message: string, onConfirm: () => void, isDanger?: boolean} | null>(null);
   const socketRef = useRef<any>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
       setToast({ message, type });
+  };
+
+  const confirm = (title: string, message: string, isDanger = false): Promise<boolean> => {
+      return new Promise((resolve) => {
+          setConfirmState({
+              isOpen: true,
+              title,
+              message,
+              isDanger,
+              onConfirm: () => {
+                  setConfirmState(null);
+                  resolve(true);
+              }
+          });
+      });
   };
 
   useEffect(() => {
@@ -125,14 +177,23 @@ const ServerManager = () => {
   };
 
   const handleClearLogs = async () => {
-    if (!window.confirm('Are you sure you want to delete all logs?')) return;
-    try {
-        await api.delete(`/projects/${id}/logs`);
-        setLogs([]);
-        showToast('Logs cleared', 'success');
-    } catch (e) {
-        showToast('Failed to clear logs', 'error');
-    }
+    // Custom confirmation
+    setConfirmState({
+        isOpen: true,
+        title: 'Clear Logs',
+        message: 'Are you sure you want to delete all logs? This history cannot be recovered.',
+        isDanger: true,
+        onConfirm: async () => {
+            setConfirmState(null);
+            try {
+                await api.delete(`/projects/${id}/logs`);
+                setLogs([]);
+                showToast('Logs cleared', 'success');
+            } catch (e) {
+                showToast('Failed to clear logs', 'error');
+            }
+        }
+    });
   };
 
   const handleStart = async () => {
@@ -168,13 +229,22 @@ const ServerManager = () => {
 
   const handlePullUpdates = async () => {
       if (status === 'running' && !project?.autoDeploy) {
-          if (!window.confirm('Project is running. Stop it to update?')) return;
-          // If they say yes, we'll let the backend handle the stop (if we implemented that logic)
-          // or we stop it here. Backend `pullProject` now handles auto-stop if `autoDeploy` is true.
-          // But if `autoDeploy` is false, backend throws.
-          // Let's just try calling pull, if it fails, show error.
+           setConfirmState({
+              isOpen: true,
+              title: 'Project Running',
+              message: 'The project is currently running. You should stop it before updating to avoid conflicts. Continue anyway?',
+              isDanger: true,
+              onConfirm: async () => {
+                  setConfirmState(null);
+                  performPull();
+              }
+           });
+           return;
       }
-      
+      performPull();
+  };
+
+  const performPull = async () => {
       showToast('Pulling updates...', 'info');
       try {
         await api.post(`/projects/${id}/pull`);
@@ -204,6 +274,14 @@ const ServerManager = () => {
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col font-sans">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      <ConfirmModal 
+        isOpen={!!confirmState} 
+        title={confirmState?.title} 
+        message={confirmState?.message} 
+        isDanger={confirmState?.isDanger}
+        onConfirm={confirmState?.onConfirm} 
+        onCancel={() => setConfirmState(null)} 
+      />
       
       {/* Header */}
       <div className="bg-gray-800 p-4 shadow-md flex justify-between items-center border-b border-gray-700 z-10">
@@ -341,10 +419,10 @@ const ServerManager = () => {
             </div>
         )}
         
-        {activeTab === 'files' && <FileManager projectId={id!} showToast={showToast} />}
+        {activeTab === 'files' && <FileManager projectId={id!} showToast={showToast} confirm={confirm} />}
         {activeTab === 'monitoring' && <Monitoring statsHistory={statsHistory} />}
         {activeTab === 'events' && <EventsList events={events} />}
-        {activeTab === 'settings' && <ProjectSettings projectId={id!} project={project} onUpdate={fetchProject} showToast={showToast} />}
+        {activeTab === 'settings' && <ProjectSettings projectId={id!} project={project} onUpdate={fetchProject} showToast={showToast} confirm={confirm} />}
       </div>
     </div>
   );
@@ -451,7 +529,7 @@ const Monitoring = ({ statsHistory }: { statsHistory: any[] }) => {
     );
 };
 
-const FileManager = ({ projectId, showToast }: { projectId: string, showToast: any }) => {
+const FileManager = ({ projectId, showToast, confirm }: { projectId: string, showToast: any, confirm: any }) => {
     const [files, setFiles] = useState<any[]>([]);
     const [currentPath, setCurrentPath] = useState('');
     const [editingFile, setEditingFile] = useState<string | null>(null);
@@ -529,8 +607,11 @@ const FileManager = ({ projectId, showToast }: { projectId: string, showToast: a
                 <div className="bg-[#25282c] border-b border-[#373b41] p-3 flex justify-between items-center px-6">
                     <div className="flex items-center gap-4">
                         <button 
-                            onClick={() => {
-                                if (hasChanges && !window.confirm('You have unsaved changes. Are you sure you want to close?')) return;
+                            onClick={async () => {
+                                if (hasChanges) {
+                                    const confirmed = await confirm('Unsaved Changes', 'You have unsaved changes. Are you sure you want to close?', true);
+                                    if (!confirmed) return;
+                                }
                                 setEditingFile(null);
                                 setFileContent('');
                                 setOriginalContent('');
@@ -663,7 +744,7 @@ const FileManager = ({ projectId, showToast }: { projectId: string, showToast: a
     );
 };
 
-const ProjectSettings = ({ projectId, project, onUpdate, showToast }: { projectId: string; project: any; onUpdate: () => void, showToast: any }) => {
+const ProjectSettings = ({ projectId, project, onUpdate, showToast, confirm }: { projectId: string; project: any; onUpdate: () => void, showToast: any, confirm: any }) => {
     const [formData, setFormData] = useState({
         port: project.port || 3000,
         startCmd: project.startCmd || '',
@@ -690,7 +771,8 @@ const ProjectSettings = ({ projectId, project, onUpdate, showToast }: { projectI
     };
 
     const handleDelete = async () => {
-        if (!window.confirm('Are you sure you want to delete this project? This action cannot be undone.')) return;
+        const confirmed = await confirm('Delete Project', 'Are you sure you want to delete this project? This action cannot be undone.', true);
+        if (!confirmed) return;
         
         setDeleting(true);
         try {
