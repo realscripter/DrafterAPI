@@ -14,15 +14,35 @@ const PROJECTS_DIR = path.join(__dirname, 'projects_data');
 fs.mkdir(PROJECTS_DIR, { recursive: true }).catch(() => {});
 
 const processes = new Map(); // projectId -> { process, monitorInterval }
-const logs = new Map(); // projectId -> []
+const inMemoryLogs = new Map(); // projectId -> []
 
-export function getLogs(projectId) {
-  return logs.get(projectId) || [];
+async function getLogPath(projectId) {
+    const dir = path.join(PROJECTS_DIR, projectId);
+    await fs.mkdir(dir, { recursive: true }).catch(() => {});
+    return path.join(dir, 'logs.json');
 }
 
-function addLog(projectId, message, type = 'stdout') {
-    if (!logs.has(projectId)) logs.set(projectId, []);
-    const projectLogs = logs.get(projectId);
+export async function getLogs(projectId) {
+  try {
+    const logPath = await getLogPath(projectId);
+    const data = await fs.readFile(logPath, 'utf-8');
+    return JSON.parse(data);
+  } catch (e) {
+    return inMemoryLogs.get(projectId) || [];
+  }
+}
+
+export async function clearLogs(projectId) {
+    const logPath = await getLogPath(projectId);
+    await fs.writeFile(logPath, JSON.stringify([]));
+    inMemoryLogs.set(projectId, []);
+}
+
+async function addLog(projectId, message, type = 'stdout') {
+    if (!inMemoryLogs.has(projectId)) {
+        inMemoryLogs.set(projectId, await getLogs(projectId));
+    }
+    const projectLogs = inMemoryLogs.get(projectId);
     const logEntry = {
         id: Date.now() + Math.random(),
         timestamp: new Date().toISOString(),
@@ -31,8 +51,12 @@ function addLog(projectId, message, type = 'stdout') {
     };
     projectLogs.push(logEntry);
     
-    // Keep last 1000 lines
-    if (projectLogs.length > 1000) projectLogs.shift();
+    // Keep last 2000 lines in memory and disk
+    if (projectLogs.length > 2000) projectLogs.shift();
+    
+    // Persist to disk (debounce this in real app, but for now simple)
+    const logPath = await getLogPath(projectId);
+    await fs.writeFile(logPath, JSON.stringify(projectLogs, null, 2)).catch(() => {});
     
     return logEntry;
 }
@@ -170,6 +194,14 @@ export async function stopProject(projectId) {
         data.process.kill();
         // Force update status just in case
         updateProject(projectId, { status: 'stopped' });
+        processes.delete(projectId);
+    }
+}
+
+export async function stopAllProjects() {
+    console.log('Stopping all project instances...');
+    for (const projectId of processes.keys()) {
+        await stopProject(projectId);
     }
 }
 

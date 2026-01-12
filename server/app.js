@@ -8,8 +8,9 @@ import { fileURLToPath } from 'url';
 import { generateKey, resetKey, validateKey, hasKey } from './auth.js';
 import { saveGithubToken, getGithubToken, listRepos, getUser, readConfig, writeConfig } from './github.js';
 import { listProjects, createProject, getProject, deleteProject, updateProject } from './projects.js';
-import { startProject, stopProject, getLogs, setupProject } from './runner.js';
+import { startProject, stopProject, getLogs, setupProject, clearLogs, stopAllProjects } from './runner.js';
 import { listFiles, readFile, saveFile } from './files.js';
+import { setupDomain, removeDomain } from './domains.js';
 import readline from 'readline';
 import axios from 'axios';
 
@@ -264,8 +265,30 @@ export async function run(args) {
   });
 
   app.delete('/api/projects/:id', async (req, res) => {
+    await removeDomain(req.params.id);
     await deleteProject(req.params.id);
     res.json({ success: true });
+  });
+
+  app.post('/api/projects/:id/domain', async (req, res) => {
+    const { domain, port } = req.body;
+    try {
+        await setupDomain(req.params.id, domain, port);
+        await updateProject(req.params.id, { domain });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete('/api/projects/:id/domain', async (req, res) => {
+    try {
+        await removeDomain(req.params.id);
+        await updateProject(req.params.id, { domain: null });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
   });
 
   // Runner Routes
@@ -287,8 +310,17 @@ export async function run(args) {
     }
   });
 
-  app.get('/api/projects/:id/logs', (req, res) => {
-    res.json(getLogs(req.params.id));
+  app.get('/api/projects/:id/logs', async (req, res) => {
+    res.json(await getLogs(req.params.id));
+  });
+
+  app.delete('/api/projects/:id/logs', async (req, res) => {
+    try {
+      await clearLogs(req.params.id);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // File Routes
@@ -348,6 +380,15 @@ export async function run(args) {
     console.log(`DrafterApi running on port ${PORT}`);
     console.log(`Access dashboard at http://localhost:${PORT}`);
   });
+
+  // Handle exit
+  const cleanup = async () => {
+    await stopAllProjects();
+    process.exit(0);
+  };
+
+  process.on('SIGINT', cleanup);
+  process.on('SIGTERM', cleanup);
 }
 
 // main();
