@@ -15,6 +15,7 @@ fs.mkdir(PROJECTS_DIR, { recursive: true }).catch(() => {});
 
 const processes = new Map(); // projectId -> { process, monitorInterval }
 const inMemoryLogs = new Map(); // projectId -> []
+const saveLogTimeouts = new Map(); // projectId -> timeoutId
 
 async function getLogPath(projectId) {
     const dir = path.join(PROJECTS_DIR, projectId);
@@ -91,9 +92,24 @@ async function addLog(projectId, message, type = 'stdout') {
     // Keep last 2000 lines in memory and disk
     if (projectLogs.length > 2000) projectLogs.shift();
     
-    // Persist to disk (debounce this in real app, but for now simple)
-    const logPath = await getLogPath(projectId);
-    await fs.writeFile(logPath, JSON.stringify(projectLogs, null, 2)).catch(() => {});
+    // Debounce save to disk (wait 1s of silence before writing, or max 5s)
+    if (saveLogTimeouts.has(projectId)) {
+        clearTimeout(saveLogTimeouts.get(projectId));
+    }
+
+    const timeout = setTimeout(async () => {
+        try {
+            const logPath = await getLogPath(projectId);
+            // Get latest ref in case it changed
+            const currentLogs = inMemoryLogs.get(projectId) || [];
+            await fs.writeFile(logPath, JSON.stringify(currentLogs, null, 2));
+            saveLogTimeouts.delete(projectId);
+        } catch (e) {
+            console.error('Failed to save logs:', e);
+        }
+    }, 1000); // 1 second debounce
+
+    saveLogTimeouts.set(projectId, timeout);
     
     return logEntry;
 }
