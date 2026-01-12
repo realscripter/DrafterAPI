@@ -55,12 +55,17 @@ async function addEvent(projectId, type, message) {
 }
 
 export async function getLogs(projectId) {
+  if (inMemoryLogs.has(projectId)) {
+      return inMemoryLogs.get(projectId);
+  }
   try {
     const logPath = await getLogPath(projectId);
     const data = await fs.readFile(logPath, 'utf-8');
-    return JSON.parse(data);
+    const logs = JSON.parse(data);
+    inMemoryLogs.set(projectId, logs); // Cache it
+    return logs;
   } catch (e) {
-    return inMemoryLogs.get(projectId) || [];
+    return [];
   }
 }
 

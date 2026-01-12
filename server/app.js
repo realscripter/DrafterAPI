@@ -257,6 +257,17 @@ export async function run(args) {
 
   app.put('/api/projects/:id', async (req, res) => {
     try {
+      if (req.body.port) {
+          const port = Number(req.body.port);
+          if (port === PORT) {
+              throw new Error(`Port ${port} is reserved for DrafterAPI.`);
+          }
+          const allProjects = await listProjects();
+          const conflict = allProjects.find(p => p.port === port && p.id !== req.params.id);
+          if (conflict) {
+              throw new Error(`Port ${port} is already used by project "${conflict.name}".`);
+          }
+      }
       const project = await updateProject(req.params.id, req.body);
       res.json(project);
     } catch (err) {
