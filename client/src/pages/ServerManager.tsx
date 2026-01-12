@@ -757,6 +757,17 @@ const ProjectSettings = ({ projectId, project, onUpdate, showToast, confirm }: {
     const [deleting, setDeleting] = useState(false);
     const navigate = useNavigate();
 
+    useEffect(() => {
+        setFormData({
+            port: project.port || 3000,
+            startCmd: project.startCmd || '',
+            installCmd: project.installCmd || '',
+            buildCmd: project.buildCmd || '',
+            ramLimit: project.ramLimit || 512,
+            autoDeploy: project.autoDeploy || false
+        });
+    }, [project]);
+
     const handleSave = async () => {
         setSaving(true);
         try {
