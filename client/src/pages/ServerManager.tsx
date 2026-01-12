@@ -19,7 +19,7 @@ const ServerManager = () => {
     fetchProject();
     fetchLogs();
 
-    const socket = io('http://localhost:8000');
+    const socket = io(import.meta.env.DEV ? 'http://localhost:8000' : '/');
     socketRef.current = socket;
 
     socket.emit('join-project', id);
