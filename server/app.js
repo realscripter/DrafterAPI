@@ -220,8 +220,7 @@ export async function run(args) {
   app.use(express.static(path.join(__dirname, '../client/dist')));
 
   // Handle SPA routing
-  app.get('*', (req, res) => {
-    if (req.path.startsWith('/api')) return res.status(404).json({ error: 'Not found' });
+  app.get(/^(?!\/api).+/, (req, res) => {
     res.sendFile(path.join(__dirname, '../client/dist/index.html'));
   });
 
