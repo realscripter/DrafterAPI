@@ -229,7 +229,7 @@ export async function run(args) {
     res.sendFile(path.join(__dirname, '../client/dist/index.html'));
   });
 
-  httpServer.listen(PORT, '127.0.0.1', () => {
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`DrafterApi running on port ${PORT}`);
     console.log(`Access dashboard at http://localhost:${PORT}`);
   });
