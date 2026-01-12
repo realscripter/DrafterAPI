@@ -254,6 +254,15 @@ export async function run(args) {
     res.json(project);
   });
 
+  app.put('/api/projects/:id', async (req, res) => {
+    try {
+      const project = await updateProject(req.params.id, req.body);
+      res.json(project);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.delete('/api/projects/:id', async (req, res) => {
     await deleteProject(req.params.id);
     res.json({ success: true });
