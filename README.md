@@ -34,7 +34,15 @@ If you are on a Linux VPS (Ubuntu/Debian):
 
 ## Manual Installation
 
-1. Clone the repository:
+1. **Prerequisites (Install Node.js)**:
+   If you don't have Node.js installed (check with `node -v`), install it:
+   ```bash
+   # Ubuntu/Debian
+   curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+   sudo apt-get install -y nodejs
+   ```
+
+2. Clone the repository:
    ```bash
    git clone https://github.com/realscripter/DrafterAPI.git
    cd DrafterAPI
