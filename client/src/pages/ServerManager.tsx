@@ -673,6 +673,8 @@ const ProjectSettings = ({ projectId, project, onUpdate, showToast }: { projectI
         autoDeploy: project.autoDeploy || false
     });
     const [saving, setSaving] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const navigate = useNavigate();
 
     const handleSave = async () => {
         setSaving(true);
@@ -684,6 +686,21 @@ const ProjectSettings = ({ projectId, project, onUpdate, showToast }: { projectI
             showToast('Failed to save settings', 'error');
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (!window.confirm('Are you sure you want to delete this project? This action cannot be undone.')) return;
+        
+        setDeleting(true);
+        try {
+            // Stop the server first if running, but backend should handle cleanup
+            await api.delete(`/projects/${projectId}`);
+            showToast('Project deleted successfully', 'success');
+            navigate('/dashboard');
+        } catch (e: any) {
+            showToast('Failed to delete project: ' + (e.response?.data?.error || e.message), 'error');
+            setDeleting(false);
         }
     };
 
@@ -752,7 +769,7 @@ const ProjectSettings = ({ projectId, project, onUpdate, showToast }: { projectI
                             </div>
                         ))}
 
-                        <div className="pt-4">
+                        <div className="pt-4 space-y-4">
                             <button
                                 onClick={handleSave}
                                 disabled={saving}
@@ -760,6 +777,19 @@ const ProjectSettings = ({ projectId, project, onUpdate, showToast }: { projectI
                             >
                                 {saving ? <RefreshCw className="animate-spin mx-auto" size={20} /> : 'Save Configuration'}
                             </button>
+
+                            <div className="pt-8 border-t border-white/5">
+                                <h4 className="text-red-400 font-bold mb-2 flex items-center gap-2">
+                                    <Trash2 size={16} /> Danger Zone
+                                </h4>
+                                <button
+                                    onClick={handleDelete}
+                                    disabled={deleting}
+                                    className="w-full py-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-xl font-bold text-sm uppercase tracking-widest transition-all active:scale-[0.98]"
+                                >
+                                    {deleting ? 'Deleting...' : 'Delete Project'}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

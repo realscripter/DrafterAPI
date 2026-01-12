@@ -54,6 +54,17 @@ const Dashboard = () => {
       }
   };
 
+  const handleDelete = async (e: React.MouseEvent, projectId: string) => {
+    e.stopPropagation();
+    if (!window.confirm('Are you sure you want to delete this project?')) return;
+    try {
+        await api.delete(`/projects/${projectId}`);
+        setProjects(projects.filter(p => p.id !== projectId));
+    } catch (err) {
+        alert('Failed to delete project');
+    }
+  };
+
   if (loading) return <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center font-sans">Loading...</div>;
 
   return (
@@ -144,6 +155,13 @@ const Dashboard = () => {
                         onClick={() => navigate(`/dashboard/server/${project.id}`)}
                     >
                         Manage Server
+                    </button>
+                    <button 
+                        className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 px-3 rounded-xl transition-all"
+                        onClick={(e) => handleDelete(e, project.id)}
+                        title="Delete Project"
+                    >
+                        <Trash2 size={18} />
                     </button>
                 </div>
               </div>
