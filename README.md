@@ -9,9 +9,9 @@ A simple, self-hosted tool to manage and deploy GitHub projects on your own serv
 - **Live Console**: View logs in real-time.
 - **File Manager**: Edit project files directly from the dashboard.
 
-## Installation (One-Command Setup)
+## Installation
 
-If you are on a Linux VPS (Ubuntu/Debian):
+### Linux VPS (Ubuntu/Debian) - One-Command Setup
 
 1. Clone and run setup:
    ```bash
@@ -31,6 +31,41 @@ If you are on a Linux VPS (Ubuntu/Debian):
    ```bash
    ./start.sh
    ```
+
+### Windows (Local Development)
+
+1. **Clone the repository:**
+   ```powershell
+   git clone https://github.com/realscripter/DrafterAPI.git
+   cd DrafterAPI
+   ```
+
+2. **Install dependencies and build:**
+   ```powershell
+   # Install Server Dependencies
+   cd server
+   npm install
+   cd ..
+
+   # Install Client Dependencies and Build
+   cd client
+   npm install
+   npm run build
+   cd ..
+   ```
+
+3. **Generate your key:**
+   ```powershell
+   .\DrafterApi.bat key
+   ```
+
+4. **Start the server:**
+   ```powershell
+   .\DrafterApi.bat
+   ```
+
+5. **Access Dashboard:**
+   Open [http://localhost:8000](http://localhost:8000) in your browser.
 
 ## Manual Installation
 
