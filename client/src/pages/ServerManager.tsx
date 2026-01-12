@@ -197,32 +197,39 @@ const ServerManager = () => {
   };
 
   const handleStart = async () => {
+    setStatus('starting'); // Optimistic update
     try {
         await api.post(`/projects/${id}/start`);
         showToast('Start command sent', 'success');
     } catch (e: any) {
+        setStatus('stopped'); // Revert on failure
         showToast(e.response?.data?.error || 'Failed to start', 'error');
     }
   };
 
   const handleStop = async () => {
+    setStatus('stopping'); // Optimistic update
     try {
         await api.post(`/projects/${id}/stop`);
         showToast('Stop command sent', 'info');
     } catch (e: any) {
+        setStatus('running'); // Revert on failure
         showToast(e.response?.data?.error || 'Failed to stop', 'error');
     }
   };
 
   const handleRestart = async () => {
+    setStatus('stopping');
     try {
         await api.post(`/projects/${id}/stop`);
         showToast('Restarting...', 'info');
         setTimeout(async () => {
+            setStatus('starting');
             await api.post(`/projects/${id}/start`);
             showToast('Start command sent', 'success');
         }, 1000);
     } catch (e: any) {
+        setStatus('error');
         showToast('Failed to restart', 'error');
     }
   };
@@ -291,10 +298,15 @@ const ServerManager = () => {
             </button>
             <div>
                 <h1 className="text-xl font-bold leading-tight">{project.name}</h1>
-                <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${status === 'running' ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
-                    <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{status}</span>
-                </div>
+    <div className="flex items-center gap-2">
+        <div className={`w-2 h-2 rounded-full ${
+            status === 'running' ? 'bg-green-500 animate-pulse' : 
+            status === 'starting' ? 'bg-yellow-500 animate-bounce' :
+            status === 'stopping' ? 'bg-red-500 animate-pulse' :
+            'bg-gray-500'
+        }`} />
+        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{status}</span>
+    </div>
             </div>
         </div>
         
