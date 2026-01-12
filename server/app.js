@@ -6,11 +6,12 @@ import { Server } from 'socket.io';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { generateKey, resetKey, validateKey, hasKey } from './auth.js';
-import { saveGithubToken, getGithubToken, listRepos, getUser } from './github.js';
+import { saveGithubToken, getGithubToken, listRepos, getUser, readConfig, writeConfig } from './github.js';
 import { listProjects, createProject, getProject, deleteProject, updateProject } from './projects.js';
 import { startProject, stopProject, getLogs, setupProject } from './runner.js';
 import { listFiles, readFile, saveFile } from './files.js';
 import readline from 'readline';
+import axios from 'axios';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -46,6 +47,43 @@ export async function run(args) {
       }
       rl.close();
       process.exit(0);
+    });
+    return;
+  }
+
+  if (command === 'github-oauth') {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+
+    rl.question('GitHub Client ID: ', async (clientId) => {
+      if (!clientId) {
+        console.log('Client ID is required.');
+        rl.close();
+        process.exit(1);
+      }
+
+      rl.question('GitHub Client Secret: ', async (clientSecret) => {
+        if (!clientSecret) {
+          console.log('Client Secret is required.');
+          rl.close();
+          process.exit(1);
+        }
+
+        try {
+          const config = await readConfig();
+          config.githubClientId = clientId;
+          config.githubClientSecret = clientSecret;
+          await writeConfig(config);
+          console.log('GitHub OAuth credentials saved successfully!');
+          console.log('Restart the server to use OAuth login.');
+        } catch (err) {
+          console.error('Failed to save credentials:', err.message);
+        }
+        rl.close();
+        process.exit(0);
+      });
     });
     return;
   }
@@ -103,6 +141,74 @@ export async function run(args) {
     res.json({ connected: !!user, user });
   });
 
+  // GitHub OAuth - Start OAuth flow
+  app.get('/api/github/oauth', async (req, res) => {
+    const config = await readConfig();
+    const clientId = config.githubClientId;
+    
+    if (!clientId) {
+      return res.status(400).json({ error: 'GitHub OAuth not configured. Please set GITHUB_CLIENT_ID in config.' });
+    }
+
+    const redirectUri = `${req.protocol}://${req.get('host')}/api/github/callback`;
+    const scope = 'repo user:email';
+    const state = Math.random().toString(36).substring(7); // Simple state for CSRF protection
+    
+    // Store state in config temporarily
+    config.oauthState = state;
+    await writeConfig(config);
+    
+    const githubAuthUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&state=${state}`;
+    res.json({ authUrl: githubAuthUrl });
+  });
+
+  // GitHub OAuth - Callback handler
+  app.get('/api/github/callback', async (req, res) => {
+    const { code, state } = req.query;
+    const config = await readConfig();
+    
+    if (!code) {
+      return res.redirect('/dashboard?error=oauth_failed');
+    }
+
+    // Verify state
+    if (state !== config.oauthState) {
+      return res.redirect('/dashboard?error=invalid_state');
+    }
+
+    try {
+      // Exchange code for access token
+      const tokenResponse = await axios.post('https://github.com/login/oauth/access_token', {
+        client_id: config.githubClientId,
+        client_secret: config.githubClientSecret,
+        code: code,
+      }, {
+        headers: {
+          Accept: 'application/json',
+        }
+      });
+
+      const accessToken = tokenResponse.data.access_token;
+      if (!accessToken) {
+        throw new Error('No access token received');
+      }
+
+      // Save token
+      await saveGithubToken(accessToken);
+      
+      // Clean up state
+      delete config.oauthState;
+      await writeConfig(config);
+
+      // Redirect to dashboard
+      res.redirect('/dashboard?github_connected=true');
+    } catch (error) {
+      console.error('OAuth error:', error);
+      res.redirect('/dashboard?error=oauth_failed');
+    }
+  });
+
+  // Legacy PAT support (still works)
   app.post('/api/github/connect', async (req, res) => {
     const { token } = req.body;
     if (!token) return res.status(400).json({ error: 'Token required' });

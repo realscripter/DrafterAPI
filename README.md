@@ -121,6 +121,33 @@ A simple, self-hosted tool to manage and deploy GitHub projects on your own serv
 3. **Access Dashboard**:
    Open [http://localhost:8000](http://localhost:8000) in your browser and login with your key.
 
+## GitHub OAuth Setup (Optional - Recommended)
+
+For easier GitHub connection without Personal Access Tokens:
+
+1. **Create a GitHub OAuth App:**
+   - Go to: https://github.com/settings/developers
+   - Click "New OAuth App"
+   - **Application name:** DrafterAPI (or any name)
+   - **Homepage URL:** `http://localhost:8000` (or your domain)
+   - **Authorization callback URL:** `http://localhost:8000/api/github/callback` (or `https://yourdomain.com/api/github/callback`)
+   - Click "Register application"
+   - Copy the **Client ID** and generate a **Client Secret**
+
+2. **Configure OAuth in DrafterAPI:**
+   ```bash
+   # Edit server/config.json and add:
+   {
+     "githubClientId": "your_client_id_here",
+     "githubClientSecret": "your_client_secret_here"
+   }
+   ```
+
+3. **Restart the server** and use "Login with GitHub" button instead of entering a PAT.
+
+**Note:** If OAuth is not configured, you can still use Personal Access Token method.
+
 ## Security
 - The `config.json` containing your keys and tokens is stored locally in the `server` directory and is git-ignored.
 - `projects_data` where your repos are cloned is also git-ignored.
+- GitHub OAuth credentials are stored securely in `config.json`.
