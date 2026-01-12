@@ -9,7 +9,30 @@ A simple, self-hosted tool to manage and deploy GitHub projects on your own serv
 - **Live Console**: View logs in real-time.
 - **File Manager**: Edit project files directly from the dashboard.
 
-## Installation
+## Installation (One-Command Setup)
+
+If you are on a Linux VPS (Ubuntu/Debian):
+
+1. Clone and run setup:
+   ```bash
+   git clone https://github.com/realscripter/DrafterAPI.git
+   cd DrafterAPI
+   chmod +x setup.sh start.sh
+   ./setup.sh
+   ```
+   *This script will automatically install Node.js if it's missing, install all dependencies, and build the project.*
+
+2. Generate your key:
+   ```bash
+   node server/index.js key
+   ```
+
+3. Start the server:
+   ```bash
+   ./start.sh
+   ```
+
+## Manual Installation
 
 1. Clone the repository:
    ```bash
