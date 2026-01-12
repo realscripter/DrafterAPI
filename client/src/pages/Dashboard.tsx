@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api';
-import { Plus, Github, Server, Play, Square, RefreshCw, Trash2 } from 'lucide-react';
+import { Plus, Github, Server, Trash2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface Project {
@@ -15,6 +15,7 @@ const Dashboard = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [githubUser, setGithubUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [showLogo, setShowLogo] = useState(localStorage.getItem('hide_logo') !== 'true');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -43,47 +44,79 @@ const Dashboard = () => {
     navigate('/login');
   };
 
-  if (loading) return <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">Loading...</div>;
+  const toggleLogo = () => {
+      const newState = !showLogo;
+      setShowLogo(newState);
+      if (!newState) {
+          localStorage.setItem('hide_logo', 'true');
+      } else {
+          localStorage.removeItem('hide_logo');
+      }
+  };
+
+  if (loading) return <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center font-sans">Loading...</div>;
 
   return (
     <div className="min-h-screen bg-gray-900 text-white font-sans">
-      <nav className="bg-gray-800 p-4 shadow-md flex justify-between items-center">
-        <div className="flex items-center gap-2">
-            <Server className="text-blue-500" />
-            <h1 className="text-xl font-bold">DrafterApi</h1>
+      <nav className="bg-gray-800 p-4 shadow-md flex justify-between items-center border-b border-gray-700">
+        <div className="flex items-center gap-4 group">
+            {showLogo && (
+                <div className="flex items-center gap-2 relative">
+                    <Server className="text-blue-500" />
+                    <h1 className="text-xl font-bold">DrafterApi</h1>
+                    <button 
+                        onClick={toggleLogo}
+                        className="absolute -right-6 opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-opacity p-1"
+                        title="Hide Logo"
+                    >
+                        <X size={12} />
+                    </button>
+                </div>
+            )}
+            {!showLogo && (
+                <button 
+                    onClick={toggleLogo}
+                    className="text-gray-600 hover:text-blue-500 transition-colors text-xs font-bold uppercase tracking-widest"
+                >
+                    Show Branding
+                </button>
+            )}
         </div>
         <div className="flex items-center gap-4">
             {githubUser ? (
-                <div className="flex items-center gap-2 text-sm text-gray-300">
-                    <img src={githubUser.avatar_url} alt="gh" className="w-6 h-6 rounded-full" />
-                    <span>{githubUser.login}</span>
+                <div className="flex items-center gap-2 text-sm text-gray-300 bg-gray-900 px-3 py-1.5 rounded-full border border-gray-700">
+                    <img src={githubUser.avatar_url} alt="gh" className="w-5 h-5 rounded-full" />
+                    <span className="font-medium">{githubUser.login}</span>
                 </div>
             ) : (
-                <button onClick={() => navigate('/dashboard/connect-github')} className="text-sm bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded flex items-center gap-2">
+                <button onClick={() => navigate('/dashboard/connect-github')} className="text-sm bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-all font-medium">
                     <Github size={16} /> Connect GitHub
                 </button>
             )}
-            <button onClick={handleLogout} className="bg-red-600 px-4 py-2 rounded text-sm hover:bg-red-700 transition">Logout</button>
+            <button onClick={handleLogout} className="bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 px-4 py-2 rounded-lg text-sm transition-all font-medium">Logout</button>
         </div>
       </nav>
 
       <div className="p-8 max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-8">
-          <h2 className="text-2xl font-bold">Projects</h2>
+          <h2 className="text-2xl font-bold text-white">Projects</h2>
           <button 
             onClick={() => navigate('/dashboard/create')}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded flex items-center gap-2 transition"
+            className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-blue-900/20 active:scale-95 font-medium"
           >
             <Plus size={18} /> Create Project
           </button>
         </div>
 
         {projects.length === 0 ? (
-          <div className="bg-gray-800 p-12 rounded-lg text-center border-2 border-dashed border-gray-700">
-            <p className="text-gray-400 mb-4">No projects found.</p>
+          <div className="bg-gray-800/50 p-12 rounded-3xl text-center border-2 border-dashed border-gray-700/50 flex flex-col items-center justify-center gap-4">
+            <div className="p-4 bg-gray-800 rounded-full mb-2">
+                <Server size={32} className="text-gray-600" />
+            </div>
+            <p className="text-gray-400 text-lg">No projects found.</p>
             <button 
                 onClick={() => navigate('/dashboard/create')}
-                className="text-blue-400 hover:text-blue-300 underline"
+                className="text-blue-400 hover:text-blue-300 font-medium hover:underline"
             >
                 Create your first project
             </button>
@@ -91,23 +124,26 @@ const Dashboard = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {projects.map((project) => (
-              <div key={project.id} className="bg-gray-800 rounded-lg p-6 shadow-lg hover:shadow-xl transition border border-gray-700">
+              <div key={project.id} className="bg-gray-800 rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all border border-gray-700 hover:border-gray-600 group">
                 <div className="flex justify-between items-start mb-4">
-                    <h3 className="text-xl font-bold truncate" title={project.name}>{project.name}</h3>
-                    <span className={`px-2 py-1 rounded text-xs font-bold ${
-                        project.status === 'running' ? 'bg-green-500/20 text-green-400' : 
-                        project.status === 'error' ? 'bg-red-500/20 text-red-400' : 'bg-gray-700 text-gray-400'
+                    <h3 className="text-xl font-bold truncate text-white group-hover:text-blue-400 transition-colors" title={project.name}>{project.name}</h3>
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        project.status === 'running' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 
+                        project.status === 'error' ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-gray-700 text-gray-400 border border-gray-600'
                     }`}>
-                        {project.status.toUpperCase()}
+                        {project.status}
                     </span>
                 </div>
-                <p className="text-gray-400 text-sm mb-4 truncate">{project.repoUrl}</p>
+                <p className="text-gray-500 text-sm mb-6 truncate flex items-center gap-1.5">
+                    <Github size={14} />
+                    {project.repoUrl.replace('https://github.com/', '')}
+                </p>
                 
-                <div className="flex gap-2 mt-4">
-                    <button className="flex-1 bg-gray-700 hover:bg-gray-600 py-2 rounded flex justify-center items-center gap-2 text-sm transition"
+                <div className="flex gap-2 mt-auto">
+                    <button className="flex-1 bg-gray-900 hover:bg-gray-700 text-gray-300 hover:text-white py-2.5 rounded-xl flex justify-center items-center gap-2 text-sm font-medium transition-all border border-gray-700"
                         onClick={() => navigate(`/dashboard/server/${project.id}`)}
                     >
-                        Manage
+                        Manage Server
                     </button>
                 </div>
               </div>

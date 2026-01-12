@@ -5,8 +5,20 @@ import io from 'socket.io-client';
 import { 
     Play, Square, Terminal, Folder, ArrowLeft, Save, 
     Settings, ExternalLink, RefreshCw, X, Check, 
-    Globe, Trash2, Search, FileCode, HardDrive
+    Trash2, Search, FileCode, Activity, GitBranch, Download
 } from 'lucide-react';
+import Editor from 'react-simple-code-editor';
+import { highlight, languages } from 'prismjs/components/prism-core';
+import 'prismjs/components/prism-clike';
+import 'prismjs/components/prism-javascript';
+import 'prismjs/components/prism-typescript';
+import 'prismjs/components/prism-json';
+import 'prismjs/components/prism-css';
+import 'prismjs/components/prism-markup'; // html
+import 'prismjs/components/prism-bash';
+import 'prismjs/components/prism-python';
+import 'prismjs/themes/prism-tomorrow.css'; // Dark theme
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
 const ServerManager = () => {
   const { id } = useParams();
@@ -15,6 +27,7 @@ const ServerManager = () => {
   const [status, setStatus] = useState('stopped');
   const [logs, setLogs] = useState<any[]>([]);
   const [stats, setStats] = useState({ cpu: 0, memory: 0, uptime: 0 });
+  const [statsHistory, setStatsHistory] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('console');
   const socketRef = useRef<any>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
@@ -34,6 +47,11 @@ const ServerManager = () => {
 
     socket.on('stats', (data) => {
       setStats(data);
+      setStatsHistory(prev => {
+          const newHistory = [...prev, { ...data, time: new Date().toLocaleTimeString() }];
+          if (newHistory.length > 20) newHistory.shift(); // Keep last 20 points
+          return newHistory;
+      });
     });
 
     socket.on('project:update', (data) => {
@@ -79,6 +97,11 @@ const ServerManager = () => {
     setTimeout(async () => {
       await api.post(`/projects/${id}/start`);
     }, 1000);
+  };
+
+  const handlePullUpdates = async () => {
+      // Placeholder for git pull functionality - backend support needed
+      alert('Git pull functionality coming soon to backend!');
   };
 
   const openUrl = () => {
@@ -154,6 +177,14 @@ const ServerManager = () => {
                 >
                     <Square size={20} fill="currentColor" className={status !== 'running' ? 'opacity-20' : ''} />
                 </button>
+                <div className="w-px bg-gray-800 my-1 mx-1" />
+                <button 
+                    onClick={handlePullUpdates}
+                    className="p-2.5 rounded-lg transition-all text-blue-400 hover:bg-blue-500/10 hover:scale-105 active:scale-95"
+                    title="Pull Updates from GitHub"
+                >
+                    <Download size={20} />
+                </button>
             </div>
 
             {status === 'running' && (
@@ -172,7 +203,7 @@ const ServerManager = () => {
         {[
             { id: 'console', icon: Terminal, label: 'Console' },
             { id: 'files', icon: Folder, label: 'File Editor' },
-            { id: 'domains', icon: Globe, label: 'Domains & DNS' },
+            { id: 'monitoring', icon: Activity, label: 'Monitoring' },
             { id: 'settings', icon: Settings, label: 'Settings' }
         ].map(tab => (
             <button 
@@ -224,11 +255,75 @@ const ServerManager = () => {
         )}
         
         {activeTab === 'files' && <FileManager projectId={id!} />}
-        {activeTab === 'domains' && <DomainSettings projectId={id!} project={project} onUpdate={fetchProject} />}
+        {activeTab === 'monitoring' && <Monitoring statsHistory={statsHistory} />}
         {activeTab === 'settings' && <ProjectSettings projectId={id!} project={project} onUpdate={fetchProject} />}
       </div>
     </div>
   );
+};
+
+const Monitoring = ({ statsHistory }: { statsHistory: any[] }) => {
+    return (
+        <div className="h-full p-8 overflow-y-auto bg-gray-950">
+            <div className="max-w-6xl mx-auto space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="bg-gray-900 p-6 rounded-2xl border border-white/5 shadow-xl">
+                        <h3 className="text-lg font-bold text-gray-300 mb-6 flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-purple-500" />
+                            CPU Usage
+                        </h3>
+                        <div className="h-[300px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={statsHistory}>
+                                    <defs>
+                                        <linearGradient id="colorCpu" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8}/>
+                                            <stop offset="95%" stopColor="#8884d8" stopOpacity={0}/>
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                                    <XAxis dataKey="time" stroke="#666" fontSize={12} tickLine={false} />
+                                    <YAxis stroke="#666" fontSize={12} tickLine={false} unit="%" />
+                                    <Tooltip 
+                                        contentStyle={{ backgroundColor: '#111', border: '1px solid #333' }}
+                                        labelStyle={{ color: '#888' }}
+                                    />
+                                    <Area type="monotone" dataKey="cpu" stroke="#8884d8" fillOpacity={1} fill="url(#colorCpu)" />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+
+                    <div className="bg-gray-900 p-6 rounded-2xl border border-white/5 shadow-xl">
+                        <h3 className="text-lg font-bold text-gray-300 mb-6 flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-blue-500" />
+                            Memory Usage (MB)
+                        </h3>
+                        <div className="h-[300px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={statsHistory}>
+                                    <defs>
+                                        <linearGradient id="colorMem" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                                    <XAxis dataKey="time" stroke="#666" fontSize={12} tickLine={false} />
+                                    <YAxis stroke="#666" fontSize={12} tickLine={false} unit="MB" />
+                                    <Tooltip 
+                                        contentStyle={{ backgroundColor: '#111', border: '1px solid #333' }}
+                                        labelStyle={{ color: '#888' }}
+                                    />
+                                    <Area type="monotone" dataKey="memory" stroke="#3b82f6" fillOpacity={1} fill="url(#colorMem)" />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
 };
 
 const FileManager = ({ projectId }: { projectId: string }) => {
@@ -296,9 +391,9 @@ const FileManager = ({ projectId }: { projectId: string }) => {
     if (editingFile) {
         const lang = getLanguage(editingFile);
         return (
-            <div className="h-full flex flex-col bg-gray-950 animate-in fade-in duration-300">
+            <div className="h-full flex flex-col bg-[#1d1f21] animate-in fade-in duration-300">
                 {/* Editor Header */}
-                <div className="bg-gray-900 border-b border-gray-800 p-3 flex justify-between items-center px-6">
+                <div className="bg-[#25282c] border-b border-[#373b41] p-3 flex justify-between items-center px-6">
                     <div className="flex items-center gap-4">
                         <button 
                             onClick={() => {
@@ -335,18 +430,22 @@ const FileManager = ({ projectId }: { projectId: string }) => {
                     </button>
                 </div>
                 
-                {/* Clean Code Editor Area */}
-                <div className="flex-1 relative">
-                    <div className="absolute inset-0 p-8">
-                        <textarea 
-                            className="w-full h-full bg-transparent text-gray-200 font-mono text-base resize-none outline-none leading-relaxed scrollbar-custom"
-                            value={fileContent}
-                            onChange={(e) => setFileContent(e.target.value)}
-                            spellCheck={false}
-                            autoFocus
-                            style={{ tabSize: 4 }}
-                        />
-                    </div>
+                {/* Syntax Highlighted Editor */}
+                <div className="flex-1 relative overflow-hidden">
+                    <Editor
+                        value={fileContent}
+                        onValueChange={code => setFileContent(code)}
+                        highlight={code => highlight(code, languages.javascript, 'javascript')}
+                        padding={24}
+                        style={{
+                            fontFamily: '"Fira Code", "Fira Mono", monospace',
+                            fontSize: 14,
+                            backgroundColor: '#1d1f21',
+                            color: '#c5c8c6',
+                            minHeight: '100%',
+                        }}
+                        className="min-h-full"
+                    />
                 </div>
             </div>
         )
@@ -423,108 +522,6 @@ const FileManager = ({ projectId }: { projectId: string }) => {
                             </div>
                         ))
                     )}
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const DomainSettings = ({ projectId, project, onUpdate }: { projectId: string; project: any; onUpdate: () => void }) => {
-    const [domain, setDomain] = useState(project.domain || '');
-    const [saving, setSaving] = useState(false);
-
-    const handleConnect = async () => {
-        if (!domain) return;
-        setSaving(true);
-        try {
-            await api.post(`/projects/${projectId}/domain`, { domain, port: project.port || 3000 });
-            await onUpdate();
-            alert('Domain connected! Point your DNS A record to your server IP.');
-        } catch (e: any) {
-            alert(e.response?.data?.error || 'Failed to connect domain');
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const handleRemove = async () => {
-        if (!confirm('Are you sure you want to remove this domain?')) return;
-        setSaving(true);
-        try {
-            await api.delete(`/projects/${projectId}/domain`);
-            await onUpdate();
-            setDomain('');
-        } catch (e) {
-            alert('Failed to remove domain');
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    return (
-        <div className="h-full overflow-y-auto p-8 scrollbar-custom bg-gray-950">
-            <div className="max-w-2xl mx-auto">
-                <div className="bg-gray-900 rounded-3xl p-8 border border-white/5 shadow-2xl">
-                    <div className="flex items-center gap-4 mb-8">
-                        <div className="p-3 bg-blue-500/10 rounded-2xl text-blue-400">
-                            <Globe size={28} />
-                        </div>
-                        <div>
-                            <h3 className="text-xl font-bold">Custom Domain</h3>
-                            <p className="text-sm text-gray-500">Route your traffic through a professional URL</p>
-                        </div>
-                    </div>
-                    
-                    <div className="space-y-6">
-                        <div className="bg-gray-950/50 p-6 rounded-2xl border border-white/5 space-y-4">
-                            <div className="flex flex-col gap-2">
-                                <label className="text-xs font-bold text-gray-500 uppercase tracking-widest ml-1">Connect your domain</label>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        value={domain}
-                                        onChange={(e) => setDomain(e.target.value)}
-                                        placeholder="panel.yourdomain.com"
-                                        className="flex-1 bg-gray-900 border border-gray-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-all"
-                                    />
-                                    {project.domain ? (
-                                        <button
-                                            onClick={handleRemove}
-                                            disabled={saving}
-                                            className="px-4 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-xl transition-all border border-red-500/20"
-                                        >
-                                            <Trash2 size={20} />
-                                        </button>
-                                    ) : (
-                                        <button
-                                            onClick={handleConnect}
-                                            disabled={saving || !domain}
-                                            className="px-6 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-800 disabled:text-gray-600 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-lg shadow-blue-900/20"
-                                        >
-                                            {saving ? <RefreshCw className="animate-spin" size={18} /> : 'Connect'}
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="bg-blue-500/5 p-6 rounded-2xl border border-blue-500/10">
-                            <h4 className="text-sm font-bold text-blue-400 mb-3 flex items-center gap-2">
-                                <HardDrive size={16} /> DNS Instructions
-                            </h4>
-                            <p className="text-sm text-gray-400 mb-4 leading-relaxed">
-                                To make your domain work, add the following <span className="text-white font-bold">A record</span> in your DNS provider (Cloudflare, Namecheap, etc.):
-                            </p>
-                            <div className="bg-gray-950 rounded-xl p-4 font-mono text-sm border border-white/5 grid grid-cols-3 gap-2">
-                                <div className="text-gray-600 uppercase text-[10px] font-bold">Type</div>
-                                <div className="text-gray-600 uppercase text-[10px] font-bold">Host</div>
-                                <div className="text-gray-600 uppercase text-[10px] font-bold">Value</div>
-                                <div className="text-blue-400">A</div>
-                                <div className="text-white">@</div>
-                                <div className="text-green-400">Your VPS IP</div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
