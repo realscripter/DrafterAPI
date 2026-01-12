@@ -1,0 +1,27 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "lowdb": "^7.0.1",
+    "nodemon": "^3.1.11",
+    "pidusage": "^4.0.1",
+    "simple-git": "^3.30.0",
+    "socket.io": "^4.8.3",
+    "systeminformation": "^5.30.3",
+    "uuid": "^13.0.0"
+  }
+}
