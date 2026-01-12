@@ -217,10 +217,18 @@ export async function run(args) {
 
 
   // Serve Frontend (Production)
+  // Serve static files from the 'dist' directory
   app.use(express.static(path.join(__dirname, '../client/dist')));
 
-  // Handle SPA routing
-  app.get(/^(?!\/api).+/, (req, res) => {
+  // For any other request, send the index.html file
+  // This allows client-side routing to work
+  app.get('*', (req, res) => {
+    // Check if the request is for an API endpoint
+    if (req.path.startsWith('/api')) {
+       return res.status(404).json({ error: 'Not found' });
+    }
+    
+    // Otherwise serve index.html
     res.sendFile(path.join(__dirname, '../client/dist/index.html'));
   });
 
